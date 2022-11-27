@@ -25,6 +25,8 @@ class GlWidget : public QOpenGLWidget, protected QOpenGLFunctions
 
 	DataProvider m_dataProvider;
 
+	QTimer* timer;
+
 public:
 	GlWidget(QWidget* pParent_ = nullptr);
 	~GlWidget();
@@ -33,6 +35,8 @@ protected:
 	void initializeGL() override;
 	void paintGL() override;
 	void resizeGL(int nWidth_, int nHeight_) override;
+
+	void update();
 
 protected:
 	void initialize();

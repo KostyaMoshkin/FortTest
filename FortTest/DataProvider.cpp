@@ -1,6 +1,7 @@
 #include "DataProvider.h"
 
 #include <chrono>
+#include <QDebug>
 
 static void dataCollector(float* pData_, int nBufferWidth_, const int& nCurrentPosition_)
 {
@@ -35,10 +36,15 @@ DataProvider::DataProvider()
 
 DataProvider::~DataProvider()
 {
+    delete timer;
 }
 
 void DataProvider::setBufferDimention(int nWidth_, int nHeight_)
 {
+    timer = new QTimer(this);
+    timer->start(1000 / m_nFrequency);
+    connect(timer, &QTimer::timeout, this, &DataProvider::setNewPortion);
+
     m_nBufferWidth = nWidth_;
     m_nBufferHeight = nHeight_;
 
@@ -47,15 +53,15 @@ void DataProvider::setBufferDimention(int nWidth_, int nHeight_)
 
     m_nCurrentPosition = m_nBufferHeight - 1;
 
-    setNewPortion(nullptr);
+    //setNewPortion();
 }
 
-void DataProvider::setNewPortion(float* pData_)
+void DataProvider::setNewPortion()
 {
     m_nCurrentPosition = m_nCurrentPosition > 0 ? --m_nCurrentPosition : m_nBufferHeight - 1;
 
     for (int i = 0; i < m_nBufferWidth; ++i)
-        m_vBuffer[i + m_nCurrentPosition * m_nBufferWidth] = m_nCurrentPosition % 8;
+        m_vBuffer[i + m_nCurrentPosition * m_nBufferWidth] = float(m_nCurrentPosition % 8) / 10;
 
     //memcpy(&m_vBuffer[m_nCurrentPosition * m_nBufferWidth], pData_, m_nBufferWidth * sizeof(float));
 

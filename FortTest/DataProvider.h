@@ -1,8 +1,9 @@
 #pragma once
+#include <QTimer>
 
 #include <vector>
 
-class DataProvider
+class DataProvider : public QObject
 {
 public:
 	enum BufferName {
@@ -11,6 +12,7 @@ public:
 	};
 
 private:
+	int m_nFrequency = 1;
 
 	int m_nBufferWidth = 0;
 	int m_nBufferHeight = 0;
@@ -23,13 +25,16 @@ private:
 
 	bool m_bDataReady = false;
 
+	QTimer* timer;
+
 public:
 	DataProvider();
 	~DataProvider();
 
 public:
 	void setBufferDimention(int nWidth_, int nHeight_);
-	void setNewPortion(float *pData_);
+	void setFrequency(int nFrequency_) { m_nFrequency = nFrequency_; }
+	void setNewPortion();
 
 	float* getDataBuffer(BufferName bufferName_);
 	int getDataCount(BufferName bufferName_);

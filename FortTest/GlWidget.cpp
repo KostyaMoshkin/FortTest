@@ -8,6 +8,12 @@ GlWidget::GlWidget(QWidget* pParent_)
     m_nTextureHeight = configReader.getInt("bufferSize");
     m_nLineWidth = configReader.getInt("width");
     m_nFrequency = configReader.getInt("frequency");
+
+    m_dataProvider.setFrequency(m_nFrequency);
+
+    timer = new QTimer(this);
+    timer->start(1000 / 10 / m_nFrequency);
+    connect(timer, &QTimer::timeout, this, &GlWidget::update);
 }
 
 GlWidget::~GlWidget()
@@ -20,22 +26,6 @@ void GlWidget::initializeGL()
     initialize();
 }
 
-void GlWidget::paintGL()
-{
-    if (!updateTexture())
-        return;
-
-    m_program->bind();
-
-    glEnableVertexAttribArray(m_posAttr);
-
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    glDisableVertexAttribArray(m_posAttr);
-
-    m_program->release();
-}
-
 void GlWidget::resizeGL(int nWidth_, int nHeight_)
 {
     glViewport(0, 0, nWidth_, nHeight_);
@@ -43,8 +33,6 @@ void GlWidget::resizeGL(int nWidth_, int nHeight_)
 
 void GlWidget::initialize()
 {
-    //m_timePoint = std::chrono::steady_clock::now();
-
     static const char* vertexShaderSource =
         "#version 330 core\n"
         "layout (location = 0) in vec2 posAttr;\n"
@@ -95,18 +83,39 @@ void GlWidget::initialize()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    setLineWidth(15);
+    setLineWidth(m_nLineWidth);
 
-    setTextureSize(1024, 256);
+    setTextureSize(1024, m_nTextureHeight);
+
+    m_program->release();
+}
+
+void GlWidget::update()
+{
+    if (!m_dataProvider.isReady())
+        return;
+
+    QOpenGLWidget::update(0, 0, size().width(), size().height());
+}
+
+void GlWidget::paintGL()
+{
+    if (!updateTexture())
+        return;
+
+    m_program->bind();
+
+    glEnableVertexAttribArray(m_posAttr);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glDisableVertexAttribArray(m_posAttr);
 
     m_program->release();
 }
 
 bool GlWidget::updateTexture()
 {
-    if (!m_dataProvider.isReady())
-        return false;
-
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_texture);
 
