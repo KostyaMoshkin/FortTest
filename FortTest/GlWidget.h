@@ -40,9 +40,9 @@ protected:
 
 protected:
 	void initialize();
-	bool updateTexture();
+	void updateTexture();
 	void setLineWidth(int nLineWidth_);
-	void setTextureSize(int nWidht_, int nHeight_);
+	void setTextureSize(int nWidht_);
 
 };
 

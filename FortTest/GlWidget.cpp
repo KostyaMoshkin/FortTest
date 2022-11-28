@@ -9,7 +9,7 @@ GlWidget::GlWidget(QWidget* pParent_)
     m_nLineWidth = configReader.getInt("width");
     m_nFrequency = configReader.getInt("frequency");
 
-    m_dataProvider.setFrequency(m_nFrequency);
+    m_dataProvider.init(m_nFrequency);
 
     timer = new QTimer(this);
     timer->start(1000 / 10 / m_nFrequency);
@@ -29,6 +29,10 @@ void GlWidget::initializeGL()
 void GlWidget::resizeGL(int nWidth_, int nHeight_)
 {
     glViewport(0, 0, nWidth_, nHeight_);
+
+    m_program->bind();
+    m_program->setUniformValue("m_nScreenRatio", (GLfloat)nHeight_ / m_nTextureHeight);
+    m_program->release();
 }
 
 void GlWidget::initialize()
@@ -37,11 +41,12 @@ void GlWidget::initialize()
         "#version 330 core\n"
         "layout (location = 0) in vec2 posAttr;\n"
         "uniform int m_nLineWidth;\n"
+        "uniform float m_nScreenRatio;\n"
         "out vec2 TexCoord;\n"
         "void main() {\n"
         "   gl_Position = vec4(posAttr, 1.0, 1.0);\n"
-        "   TexCoord = 1.0 - (posAttr + 1.0) / 2.0;\n"
-        "   TexCoord.y = TexCoord.y / m_nLineWidth;\n"
+        "   TexCoord = (posAttr + 1.0) / 2.0;\n"
+        "   TexCoord.y = (1.0 - TexCoord.y) * m_nScreenRatio / m_nLineWidth;\n"
         "}\n";
 
     static const char* fragmentShaderSource =
@@ -85,7 +90,7 @@ void GlWidget::initialize()
 
     setLineWidth(m_nLineWidth);
 
-    setTextureSize(1024, m_nTextureHeight);
+    setTextureSize(256);
 
     m_program->release();
 }
@@ -100,8 +105,7 @@ void GlWidget::update()
 
 void GlWidget::paintGL()
 {
-    if (!updateTexture())
-        return;
+    updateTexture();
 
     m_program->bind();
 
@@ -114,7 +118,7 @@ void GlWidget::paintGL()
     m_program->release();
 }
 
-bool GlWidget::updateTexture()
+void GlWidget::updateTexture()
 {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_texture);
@@ -123,8 +127,6 @@ bool GlWidget::updateTexture()
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)m_dataProvider.getDataCount(DataProvider::A), (GLsizei)m_nTextureWidth, (GLsizei)m_dataProvider.getDataCount(DataProvider::B), GL_RED, GL_FLOAT, m_dataProvider.getDataBuffer(DataProvider::B));
 
     m_dataProvider.dataReceived();
-
-    return true;
 }
 
 void GlWidget::setLineWidth(int nLineWidth_)
@@ -132,10 +134,9 @@ void GlWidget::setLineWidth(int nLineWidth_)
     m_program->setUniformValue("m_nLineWidth", (GLint)nLineWidth_);
 }
 
-void GlWidget::setTextureSize(int nWidht_, int nHeight_)
+void GlWidget::setTextureSize(int nWidht_)
 {
     m_nTextureWidth = nWidht_;
-    m_nTextureHeight = nHeight_;
 
     m_dataProvider.setBufferDimention(m_nTextureWidth, m_nTextureHeight);
 

@@ -1,25 +1,103 @@
 #include "DataProvider.h"
 
+#include <thread>
 #include <chrono>
 #include <QDebug>
 
-static void dataCollector(float* pData_, int nBufferWidth_, const int& nCurrentPosition_)
-{
-    auto start = std::chrono::steady_clock::now();
+#include <mutex>
 
+std::mutex mutexSpectr;
+
+const double TwoPi = 6.283185307179586;
+
+static void FFTAnalysis(unsigned _int16* AVal, float* FTvl, int Nvl, int Nft) {
+    int i, j, n, m, Mmax, Istp;
+    float Tmpr, Tmpi, Wtmp, Theta;
+    float Wpr, Wpi, Wr, Wi;
+    float* Tmvl;
+
+    n = Nvl * 2;
+    Tmvl = new float[n];
+
+    for (i = 0; i < n; i += 2) {
+        Tmvl[i] = 0;
+        Tmvl[i + 1] = AVal[i / 2];
+    }
+
+    i = 1; j = 1;
+    while (i < n) {
+        if (j > i) {
+            Tmpr = Tmvl[i]; Tmvl[i] = Tmvl[j]; Tmvl[j] = Tmpr;
+            Tmpr = Tmvl[i + 1]; Tmvl[i + 1] = Tmvl[j + 1]; Tmvl[j + 1] = Tmpr;
+        }
+        i = i + 2; m = Nvl;
+        while ((m >= 2) && (j > m)) {
+            j = j - m; m = m >> 1;
+        }
+        j = j + m;
+    }
+
+    Mmax = 2;
+    while (n > Mmax) {
+        Theta = -TwoPi / Mmax; Wpi = sin(Theta);
+        Wtmp = sin(Theta / 2); Wpr = Wtmp * Wtmp * 2;
+        Istp = Mmax * 2; Wr = 1; Wi = 0; m = 1;
+
+        while (m < Mmax) {
+            i = m; m = m + 2; Tmpr = Wr; Tmpi = Wi;
+            Wr = Wr - Tmpr * Wpr - Tmpi * Wpi;
+            Wi = Wi + Tmpr * Wpi - Tmpi * Wpr;
+
+            while (i < n - Mmax) {
+                j = i + Mmax;
+                Tmpr = Wr * Tmvl[j] - Wi * Tmvl[j - 1];
+                Tmpi = Wi * Tmvl[j] + Wr * Tmvl[j - 1];
+
+                Tmvl[j] = Tmvl[i] - Tmpr; Tmvl[j - 1] = Tmvl[i - 1] - Tmpi;
+                Tmvl[i] = Tmvl[i] + Tmpr; Tmvl[i - 1] = Tmvl[i - 1] + Tmpi;
+                i = i + Istp;
+            }
+        }
+
+        Mmax = Istp;
+    }
+
+    for (i = 0; i < Nft; i++) {
+        j = i * 2;
+        FTvl[i] = 2 * sqrt(pow(Tmvl[j], 2) + pow(Tmvl[j + 1], 2)) / Nvl / (5 * 1024);
+    }
+
+    delete[]Tmvl;
+}
+
+static void MicrophonReader(WAVEFORMATEX wfex_, WAVEHDR waveHdr_, int nFrequency_, std::vector<float>& vfSpectr_)
+{
+    HWAVEIN hWaveIn;
+
+    std::vector<unsigned _int16> vSoundBuffer(wfex_.nSamplesPerSec * wfex_.nChannels * 1.0 / nFrequency_);
+
+    waveHdr_.lpData = (LPSTR)vSoundBuffer.data();
 
     while (true)
     {
-        auto end = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed_seconds = end - start;
-        if (elapsed_seconds.count() > 0.2)
+        waveInOpen(&hWaveIn, WAVE_MAPPER, &wfex_, 0L, 0L, WAVE_FORMAT_DIRECT);
+        waveInPrepareHeader(hWaveIn, &waveHdr_, sizeof(WAVEHDR));
+        waveInAddBuffer(hWaveIn, &waveHdr_, sizeof(WAVEHDR));
+        waveInStart(hWaveIn);
+
+        while (waveInUnprepareHeader(hWaveIn, &waveHdr_, sizeof(WAVEHDR)) == WAVERR_STILLPLAYING)
+            Sleep(20);
+
+        waveInClose(hWaveIn);
+
+        std::lock_guard<std::mutex> guard(mutexSpectr);
         {
-            start = std::chrono::steady_clock::now();
-            for (int i = 0; i < nBufferWidth_; ++i)
-                pData_[i] = nCurrentPosition_ % 8;
+            FFTAnalysis(vSoundBuffer.data(), vfSpectr_.data(), vSoundBuffer.size(), vfSpectr_.size());
         }
     }
 }
+
+//------------------------------------------------------------------------------------------
 
 DataProvider::DataProvider()
 {
@@ -39,6 +117,39 @@ DataProvider::~DataProvider()
     delete timer;
 }
 
+void DataProvider::init(int nFrequency_) 
+{ 
+    m_nFrequency = nFrequency_; 
+
+    AudioInit();
+}
+
+void DataProvider::AudioInit()
+{
+    const float fPeriod = 1.0f / m_nFrequency;
+
+    const int SampleRate = 4 * 16 * 1024;
+
+    m_wfex.wFormatTag = WAVE_FORMAT_PCM;
+    m_wfex.nChannels = 2;
+    m_wfex.wBitsPerSample = 16;
+    m_wfex.nSamplesPerSec = SampleRate;
+    m_wfex.nAvgBytesPerSec = SampleRate * m_wfex.nChannels * m_wfex.wBitsPerSample / 8;
+    m_wfex.nBlockAlign = m_wfex.nChannels * m_wfex.wBitsPerSample / 8;
+    m_wfex.cbSize = 0;
+
+    m_waveHdr.dwBufferLength = SampleRate * 2 * fPeriod * m_wfex.nChannels;
+    m_waveHdr.dwBytesRecorded = 0;
+    m_waveHdr.dwUser = 0L;
+    m_waveHdr.dwFlags = 0L;
+    m_waveHdr.dwLoops = 0L;
+
+    m_vfSpectr.resize(m_wfex.nSamplesPerSec * m_wfex.nChannels * 1.0 / m_nFrequency);
+
+    std::thread micThread(MicrophonReader, m_wfex, m_waveHdr, m_nFrequency, std::ref( m_vfSpectr));
+    micThread.detach();
+}
+
 void DataProvider::setBufferDimention(int nWidth_, int nHeight_)
 {
     timer = new QTimer(this);
@@ -52,18 +163,16 @@ void DataProvider::setBufferDimention(int nWidth_, int nHeight_)
     memset(m_vBuffer.data(), 0, m_vBuffer.size() * sizeof(float));
 
     m_nCurrentPosition = m_nBufferHeight - 1;
-
-    //setNewPortion();
 }
 
 void DataProvider::setNewPortion()
 {
     m_nCurrentPosition = m_nCurrentPosition > 0 ? --m_nCurrentPosition : m_nBufferHeight - 1;
 
-    for (int i = 0; i < m_nBufferWidth; ++i)
-        m_vBuffer[i + m_nCurrentPosition * m_nBufferWidth] = float(m_nCurrentPosition % 8) / 10;
+    //for (int i = 0; i < m_nBufferWidth; ++i)
+    //    m_vBuffer[i + m_nCurrentPosition * m_nBufferWidth] = float(m_nCurrentPosition % 8) / 10;
 
-    //memcpy(&m_vBuffer[m_nCurrentPosition * m_nBufferWidth], pData_, m_nBufferWidth * sizeof(float));
+    memcpy(&m_vBuffer[m_nCurrentPosition * m_nBufferWidth], m_vfSpectr.data(), m_nBufferWidth * sizeof(float));
 
     m_vData[BufferName::A] = &m_vBuffer[m_nCurrentPosition * m_nBufferWidth];
     m_vCount[BufferName::A] = m_nBufferHeight - m_nCurrentPosition;

@@ -1,5 +1,9 @@
 #pragma once
+
 #include <QTimer>
+
+#include <windows.h>
+#include <mmsystem.h>
 
 #include <vector>
 
@@ -18,6 +22,8 @@ private:
 	int m_nBufferHeight = 0;
 	std::vector<float> m_vBuffer;
 
+	std::vector<float> m_vfSpectr;
+
 	std::vector<float *> m_vData;
 	std::vector<int> m_vCount;
 
@@ -27,14 +33,20 @@ private:
 
 	QTimer* timer;
 
+
+	WAVEFORMATEX m_wfex;
+	WAVEHDR m_waveHdr;
+
+
 public:
 	DataProvider();
 	~DataProvider();
 
 public:
 	void setBufferDimention(int nWidth_, int nHeight_);
-	void setFrequency(int nFrequency_) { m_nFrequency = nFrequency_; }
+	void init(int nFrequency_);
 	void setNewPortion();
+	void AudioInit();
 
 	float* getDataBuffer(BufferName bufferName_);
 	int getDataCount(BufferName bufferName_);
