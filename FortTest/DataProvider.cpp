@@ -2,9 +2,9 @@
 
 #include <thread>
 #include <chrono>
-#include <QDebug>
-
 #include <mutex>
+
+#include <QDebug>
 
 std::mutex mutexSpectr;
 
@@ -70,11 +70,11 @@ static void FFTAnalysis(unsigned _int16* AVal, float* FTvl, int Nvl, int Nft) {
     delete[]Tmvl;
 }
 
-static void MicrophonReader(WAVEFORMATEX wfex_, WAVEHDR waveHdr_, int nFrequency_, std::vector<float>& vfSpectr_)
+static void MicrophonReader(WAVEFORMATEX wfex_, WAVEHDR waveHdr_, std::vector<float>& vfSpectr_)
 {
     HWAVEIN hWaveIn;
 
-    std::vector<unsigned _int16> vSoundBuffer(wfex_.nSamplesPerSec * wfex_.nChannels * 1.0 / nFrequency_);
+    std::vector<unsigned _int16> vSoundBuffer(vfSpectr_.size());
 
     waveHdr_.lpData = (LPSTR)vSoundBuffer.data();
 
@@ -114,7 +114,7 @@ DataProvider::DataProvider()
 
 DataProvider::~DataProvider()
 {
-    delete timer;
+    delete m_timer;
 }
 
 void DataProvider::init(int nFrequency_) 
@@ -134,11 +134,11 @@ void DataProvider::AudioInit()
     m_wfex.nChannels = 2;
     m_wfex.wBitsPerSample = 16;
     m_wfex.nSamplesPerSec = SampleRate;
-    m_wfex.nAvgBytesPerSec = SampleRate * m_wfex.nChannels * m_wfex.wBitsPerSample / 8;
-    m_wfex.nBlockAlign = m_wfex.nChannels * m_wfex.wBitsPerSample / 8;
+    m_wfex.nAvgBytesPerSec = (DWORD)SampleRate * m_wfex.nChannels * m_wfex.wBitsPerSample / 8;
+    m_wfex.nBlockAlign = (WORD)m_wfex.nChannels * m_wfex.wBitsPerSample / 8;
     m_wfex.cbSize = 0;
 
-    m_waveHdr.dwBufferLength = SampleRate * 2 * fPeriod * m_wfex.nChannels;
+    m_waveHdr.dwBufferLength = (DWORD)SampleRate * 2 * fPeriod * m_wfex.nChannels;
     m_waveHdr.dwBytesRecorded = 0;
     m_waveHdr.dwUser = 0L;
     m_waveHdr.dwFlags = 0L;
@@ -146,31 +146,27 @@ void DataProvider::AudioInit()
 
     m_vfSpectr.resize(m_wfex.nSamplesPerSec * m_wfex.nChannels * 1.0 / m_nFrequency);
 
-    std::thread micThread(MicrophonReader, m_wfex, m_waveHdr, m_nFrequency, std::ref( m_vfSpectr));
+    std::thread micThread(MicrophonReader, m_wfex, m_waveHdr, std::ref( m_vfSpectr));
     micThread.detach();
 }
 
 void DataProvider::setBufferDimention(int nWidth_, int nHeight_)
 {
-    timer = new QTimer(this);
-    timer->start(1000 / m_nFrequency);
-    connect(timer, &QTimer::timeout, this, &DataProvider::setNewPortion);
-
     m_nBufferWidth = nWidth_;
     m_nBufferHeight = nHeight_;
 
-    m_vBuffer.resize(m_nBufferWidth * m_nBufferHeight);
-    memset(m_vBuffer.data(), 0, m_vBuffer.size() * sizeof(float));
+    m_vBuffer.resize(m_nBufferWidth * m_nBufferHeight, 0);
 
     m_nCurrentPosition = m_nBufferHeight - 1;
+
+    m_timer = new QTimer(this);
+    m_timer->start(1000 / m_nFrequency);
+    connect(m_timer, &QTimer::timeout, this, &DataProvider::setNewPortion);
 }
 
 void DataProvider::setNewPortion()
 {
     m_nCurrentPosition = m_nCurrentPosition > 0 ? --m_nCurrentPosition : m_nBufferHeight - 1;
-
-    //for (int i = 0; i < m_nBufferWidth; ++i)
-    //    m_vBuffer[i + m_nCurrentPosition * m_nBufferWidth] = float(m_nCurrentPosition % 8) / 10;
 
     memcpy(&m_vBuffer[m_nCurrentPosition * m_nBufferWidth], m_vfSpectr.data(), m_nBufferWidth * sizeof(float));
 

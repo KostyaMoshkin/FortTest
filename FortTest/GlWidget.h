@@ -12,9 +12,13 @@ class GlWidget : public QOpenGLWidget, protected QOpenGLFunctions
 
 	GLint m_posAttr = 0;
 
-	QOpenGLShaderProgram* m_program = nullptr;
+	QOpenGLShaderProgram* m_program;
 
-	unsigned int m_texture = UINT_MAX;
+	QTimer* m_timer;
+
+	DataProvider m_dataProvider;
+
+	unsigned int m_texture;
 
 	int m_nFrequency;
 
@@ -22,10 +26,6 @@ class GlWidget : public QOpenGLWidget, protected QOpenGLFunctions
 
 	int m_nTextureWidth;
 	int m_nTextureHeight;
-
-	DataProvider m_dataProvider;
-
-	QTimer* timer;
 
 public:
 	GlWidget(QWidget* pParent_ = nullptr);
@@ -36,13 +36,12 @@ protected:
 	void paintGL() override;
 	void resizeGL(int nWidth_, int nHeight_) override;
 
-	void update();
-
 protected:
 	void initialize();
 	void updateTexture();
+	void update();
+
 	void setLineWidth(int nLineWidth_);
 	void setTextureSize(int nWidht_);
-
 };
 

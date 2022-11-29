@@ -20,33 +20,32 @@ private:
 
 	int m_nBufferWidth = 0;
 	int m_nBufferHeight = 0;
-	std::vector<float> m_vBuffer;
-
-	std::vector<float> m_vfSpectr;
-
-	std::vector<float *> m_vData;
-	std::vector<int> m_vCount;
 
 	int m_nCurrentPosition = 0;
 
 	bool m_bDataReady = false;
 
-	QTimer* timer;
+	std::vector<float> m_vBuffer;
+	std::vector<float> m_vfSpectr;
 
+	std::vector<float *> m_vData;
+	std::vector<int> m_vCount;
+
+	QTimer* m_timer;
 
 	WAVEFORMATEX m_wfex;
 	WAVEHDR m_waveHdr;
-
 
 public:
 	DataProvider();
 	~DataProvider();
 
 public:
-	void setBufferDimention(int nWidth_, int nHeight_);
 	void init(int nFrequency_);
-	void setNewPortion();
 	void AudioInit();
+
+	void setBufferDimention(int nWidth_, int nHeight_);
+	void setNewPortion();
 
 	float* getDataBuffer(BufferName bufferName_);
 	int getDataCount(BufferName bufferName_);
